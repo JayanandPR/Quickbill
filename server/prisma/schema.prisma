@@ -1,0 +1,247 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────
+// USERS & ROLES
+// ─────────────────────────────
+
+enum Role {
+  ADMIN
+  CASHIER
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(CASHIER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  transactions Transaction[]
+}
+
+// ─────────────────────────────
+// CHART OF ACCOUNTS
+// ─────────────────────────────
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+model Account {
+  id        String      @id @default(uuid())
+  code      String      @unique // e.g. "1000", "4000"
+  name      String      // e.g. "Cash", "Sales Revenue", "Tax Payable"
+  type      AccountType
+  createdAt DateTime    @default(now())
+  journalLines JournalLine[]
+}
+
+// ─────────────────────────────
+// DOUBLE-ENTRY LEDGER
+// ─────────────────────────────
+
+model JournalEntry {
+  id            String        @id @default(uuid())
+  reference     String        @unique
+  description   String
+  transactionId String?       @unique
+  transaction   Transaction?  @relation(fields: [transactionId], references: [id])
+  lines         JournalLine[]
+  createdAt     DateTime      @default(now())
+  vendorBill    VendorBill?
+}
+
+model JournalLine {
+  id             String       @id @default(uuid())
+  journalEntryId String
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id])
+  accountId      String
+  account        Account      @relation(fields: [accountId], references: [id])
+  debitCents     Int          @default(0)
+  creditCents    Int          @default(0)
+}
+
+// ─────────────────────────────
+// PRODUCTS & INVENTORY
+// ─────────────────────────────
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  DISCONTINUED
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  products  Product[]
+  createdAt DateTime  @default(now())
+}
+
+model Product {
+  id             String        @id @default(uuid())
+  name           String
+  sku            String        @unique
+  barcode        String?       @unique
+  categoryId     String
+  category       Category      @relation(fields: [categoryId], references: [id])
+  costPriceCents Int
+  sellPriceCents Int
+  taxRatePercent Int           @default(0)
+  unit           String        @default("pcs")
+  stockQuantity  Int           @default(0)
+  reorderPoint   Int           @default(5)
+  hsnCode        String?
+  status         ProductStatus @default(ACTIVE)
+  deletedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  saleItems      SaleItem[]
+  vendorBillItems VendorBillItem[]
+}
+
+// ─────────────────────────────
+// SALES / BILLING
+// ─────────────────────────────
+
+enum PaymentMethod {
+  CASH
+  CARD
+  UPI
+}
+
+enum TransactionStatus {
+  COMPLETED
+  REFUNDED
+  VOIDED
+}
+
+model Transaction {
+  id              String             @id @default(uuid())
+  invoiceNumber   String             @unique
+  cashierId       String
+  cashier         User               @relation(fields: [cashierId], references: [id])
+  items           SaleItem[]
+  subtotalCents   Int
+  discountCents   Int                @default(0)
+  taxCents        Int
+  grandTotalCents Int
+  paymentMethod   PaymentMethod
+  status          TransactionStatus  @default(COMPLETED)
+  createdAt       DateTime           @default(now())
+  journalEntry    JournalEntry?
+  customerId      String?
+  customer        Customer? @relation(fields: [customerId], references: [id])
+}
+
+model SaleItem {
+  id             String      @id @default(uuid())
+  transactionId  String
+  transaction    Transaction @relation(fields: [transactionId], references: [id])
+  productId      String
+  product        Product     @relation(fields: [productId], references: [id])
+  nameSnapshot   String
+  skuSnapshot    String
+  quantity       Int
+  unitPriceCents Int
+  taxRatePercent Int
+  lineTotalCents Int
+}
+
+// ─────────────────────────────
+// CUSTOMERS & VENDORS
+// ─────────────────────────────
+
+model Customer {
+  id           String        @id @default(uuid())
+  name         String
+  email        String?
+  phone        String?
+  transactions Transaction[]
+  deletedAt    DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Vendor {
+  id        String    @id @default(uuid())
+  name      String
+  email     String?
+  phone     String?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  bills     VendorBill[]
+}
+
+// ─────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  userName   String   // snapshotted, in case the user is later deleted
+  action     String   // e.g. "CREATE", "UPDATE", "DELETE"
+  entityType String   // e.g. "Product", "Category", "Customer"
+  entityId   String
+  details    String?  // human-readable summary, e.g. "Deleted product 'Coca-Cola 500ml'"
+  createdAt  DateTime @default(now())
+}
+
+// ─────────────────────────────
+// VENDOR BILLS (PURCHASES / EXPENSES)
+// ─────────────────────────────
+
+enum BillPaymentStatus {
+  PAID
+  UNPAID
+}
+
+model VendorBill {
+  id              String            @id @default(uuid())
+  billNumber      String            @unique
+  vendorInvoiceNumber String
+  vendorId        String
+  vendor          Vendor            @relation(fields: [vendorId], references: [id])
+  items           VendorBillItem[]
+  subtotalCents   Int
+  taxCents        Int               @default(0)
+  grandTotalCents Int
+  paymentStatus   BillPaymentStatus @default(UNPAID)
+  purchaseDate    DateTime          @default(now())
+  dueDate         DateTime?
+  journalEntryId  String?           @unique
+  journalEntry    JournalEntry?     @relation(fields: [journalEntryId], references: [id])
+  createdAt       DateTime          @default(now())
+
+  @@unique([vendorId, vendorInvoiceNumber])
+}
+
+model VendorBillItem {
+  id             String     @id @default(uuid())
+  vendorBillId   String
+  vendorBill     VendorBill @relation(fields: [vendorBillId], references: [id])
+  productId      String
+  product        Product    @relation(fields: [productId], references: [id])
+  nameSnapshot   String
+  quantity       Int
+  unitCostCents  Int
+  lineTotalCents Int
+}
