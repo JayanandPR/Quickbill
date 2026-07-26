@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { buildSaleJournalLines, resolveAndValidateLines } from '../lib/ledger';
+import { generateInvoicePdf } from '../lib/pdf/invoiceLayout';
 
 const saleItemInputSchema = z.object({
   productId: z.string().uuid('Invalid product ID'),
@@ -190,4 +191,46 @@ export async function getTransactionById(req: Request, res: Response) {
   }
 
   return res.status(200).json({ transaction });
+}
+
+export async function getTransactionInvoice(req: Request, res: Response) {
+  const { id } = req.params as { id: string };
+
+  const transaction = await prisma.transaction.findUnique({
+    where: { id },
+    include: {
+      items: true,
+      cashier: { select: { name: true } },
+      customer: { select: { name: true } },
+    },
+  });
+
+  if (!transaction) {
+    return res.status(404).json({ message: 'Transaction not found' });
+  }
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${transaction.invoiceNumber}.pdf"`);
+
+  generateInvoicePdf(
+    {
+      documentTitle: 'SALES INVOICE',
+      invoiceNumber: transaction.invoiceNumber,
+      date: transaction.createdAt,
+      partyLabel: 'Billed To',
+      partyName: transaction.customer?.name ?? 'Walk-in Customer',
+      items: transaction.items.map((item) => ({
+        name: item.nameSnapshot,
+        quantity: item.quantity,
+        unitPriceCents: item.unitPriceCents,
+        lineTotalCents: item.lineTotalCents,
+      })),
+      subtotalCents: transaction.subtotalCents,
+      taxCents: transaction.taxCents,
+      discountCents: transaction.discountCents,
+      grandTotalCents: transaction.grandTotalCents,
+      footerNote: `Served by ${transaction.cashier.name} • Payment: ${transaction.paymentMethod}`,
+    },
+    res
+  );
 }

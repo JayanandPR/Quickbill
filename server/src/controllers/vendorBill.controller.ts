@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { buildVendorBillJournalLines, resolveAndValidateLines } from '../lib/ledger';
+import { generateInvoicePdf } from '../lib/pdf/invoiceLayout';
 
 const billItemSchema = z.object({
   productId: z.string().uuid(),
@@ -142,4 +143,43 @@ export async function getVendorBills(req: Request, res: Response) {
     bills,
     pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
   });
+}
+
+export async function getVendorBillInvoice(req: Request, res: Response) {
+  const { id } = req.params as { id: string };
+
+  const bill = await prisma.vendorBill.findUnique({
+    where: { id },
+    include: { items: true, vendor: true },
+  });
+
+  if (!bill) {
+    return res.status(404).json({ message: 'Vendor bill not found' });
+  }
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${bill.billNumber}.pdf"`);
+
+  generateInvoicePdf(
+    {
+      documentTitle: 'PURCHASE INVOICE',
+      invoiceNumber: bill.billNumber,
+      secondaryReference: { label: 'Vendor Invoice', value: bill.vendorInvoiceNumber },
+      date: bill.purchaseDate,
+      dueDate: bill.paymentStatus === 'UNPAID' ? bill.dueDate ?? undefined : undefined,
+      partyLabel: 'Purchased From',
+      partyName: bill.vendor.name,
+      items: bill.items.map((item) => ({
+        name: item.nameSnapshot,
+        quantity: item.quantity,
+        unitPriceCents: item.unitCostCents,
+        lineTotalCents: item.lineTotalCents,
+      })),
+      subtotalCents: bill.subtotalCents,
+      taxCents: bill.taxCents,
+      grandTotalCents: bill.grandTotalCents,
+      footerNote: `Payment Status: ${bill.paymentStatus}`,
+    },
+    res
+  );
 }

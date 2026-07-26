@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Search, Plus, Minus, Trash2, PackagePlus, X, History, ShoppingCart, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, PackagePlus, X, History, ShoppingCart, AlertTriangle, CheckCircle2, Clock, FileText } from 'lucide-react';
 import api from '../lib/api';
 import { centsToDisplay, displayToCents } from '../lib/currency';
 import type { Product, Vendor, PurchaseCartItem, BillPaymentStatus, VendorBill, VendorBillsResponse } from '../types';
 import Pagination from '../components/Pagination';
+import { viewInvoice } from '../lib/invoice';
 
 type View = 'record' | 'history';
 
@@ -41,7 +42,7 @@ function RecordPurchaseView({ setView }: { setView: (v: View) => void }) {
   const [paymentStatus, setPaymentStatus] = useState<BillPaymentStatus>('UNPAID');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [lastBillNumber, setLastBillNumber] = useState<string | null>(null);
+  const [lastBill, setLastBill] = useState<{ id: string; billNumber: string } | null>(null);
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -158,7 +159,7 @@ function RecordPurchaseView({ setView }: { setView: (v: View) => void }) {
         purchaseDate,
         dueDate: paymentStatus === 'UNPAID' ? dueDate || undefined : undefined,
       });
-      setLastBillNumber(res.data.bill.billNumber);
+      setLastBill({ id: res.data.bill.id, billNumber: res.data.bill.billNumber });
       setCart([]);
       setSelectedVendor(null);
       setVendorSearch('');
@@ -222,12 +223,20 @@ function RecordPurchaseView({ setView }: { setView: (v: View) => void }) {
           </div>
         )}
 
-        {lastBillNumber && (
+        {lastBill && (
           <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-md px-4 py-3 mb-4 flex items-center justify-between shrink-0">
-            <span>Purchase recorded — Bill {lastBillNumber}</span>
-            <button onClick={() => setLastBillNumber(null)} className="text-green-500 hover:text-green-700">
-              <X size={16} />
-            </button>
+            <span>Purchase recorded — Bill {lastBill.billNumber}</span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => viewInvoice(`/vendor-bills/${lastBill.id}/invoice`, `${lastBill.billNumber}.pdf`)}
+                className="text-green-700 font-medium hover:underline"
+              >
+                View Invoice
+              </button>
+              <button onClick={() => setLastBill(null)} className="text-green-500 hover:text-green-700">
+                <X size={16} />
+              </button>
+            </div>
           </div>
         )}
 
@@ -511,12 +520,13 @@ function PurchaseHistoryView({ setView }: { setView: (v: View) => void }) {
                 <th className="px-5 py-3 font-medium">Purchase Date</th>
                 <th className="px-5 py-3 font-medium">Total</th>
                 <th className="px-5 py-3 font-medium">Status</th>
+                <th className="px-5 py-3 font-medium w-16"></th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-6 text-center text-gray-400">
+                  <td colSpan={7} className="px-5 py-6 text-center text-gray-400">
                     Loading...
                   </td>
                 </tr>
@@ -540,6 +550,15 @@ function PurchaseHistoryView({ setView }: { setView: (v: View) => void }) {
                     </td>
                     <td className="px-5 py-3">
                       <PaymentStatusBadge bill={bill} />
+                    </td>
+                    <td className="px-5 py-3">
+                      <button
+                        onClick={() => viewInvoice(`/vendor-bills/${bill.id}/invoice`, `${bill.billNumber}.pdf`)}
+                        className="text-gray-400 hover:text-blue-600"
+                        title="View Invoice"
+                      >
+                        <FileText size={16} />
+                      </button>
                     </td>
                   </tr>
                 ))

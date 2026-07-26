@@ -5,6 +5,7 @@ import {
   getTransactionById,
 } from '../controllers/transaction.controller';
 import { requireAuth } from '../middleware/auth.middleware';
+import { getTransactionInvoice } from '../controllers/transaction.controller';
 
 const router = Router();
 
@@ -12,5 +13,6 @@ const router = Router();
 router.post('/', requireAuth, createSale);
 router.get('/', requireAuth, getTransactions);
 router.get('/:id', requireAuth, getTransactionById);
+router.get('/:id/invoice', requireAuth, getTransactionInvoice);
 
 export default router;

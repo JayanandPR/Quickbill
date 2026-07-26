@@ -3,6 +3,7 @@ import { Search, Plus, Minus, Trash2, ShoppingCart, X } from 'lucide-react';
 import api from '../lib/api';
 import { centsToDisplay } from '../lib/currency';
 import type { Product, Customer, CartItem, PaymentMethod } from '../types';
+import { viewInvoice } from '../lib/invoice';
 
 export default function Billing() {
   const [search, setSearch] = useState('');
@@ -18,7 +19,7 @@ export default function Billing() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [error, setError] = useState('');
-  const [lastInvoice, setLastInvoice] = useState<string | null>(null);
+  const [lastInvoice, setLastInvoice] = useState<{ id: string; invoiceNumber: string } | null>(null);
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
 
   // Search products (debounced)
@@ -124,7 +125,7 @@ export default function Billing() {
         paymentMethod,
         customerId: selectedCustomer?.id,
       });
-      setLastInvoice(res.data.transaction.invoiceNumber);
+      setLastInvoice({ id: res.data.transaction.id, invoiceNumber: res.data.transaction.invoiceNumber });
       setCart([]);
       setDiscount('0');
       setSelectedCustomer(null);
@@ -178,10 +179,18 @@ export default function Billing() {
 
         {lastInvoice && (
           <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-md px-4 py-3 mb-4 flex items-center justify-between">
-            <span>Sale completed — Invoice {lastInvoice}</span>
-            <button onClick={() => setLastInvoice(null)} className="text-green-500 hover:text-green-700">
-              <X size={16} />
-            </button>
+            <span>Sale completed — Invoice {lastInvoice.invoiceNumber}</span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => viewInvoice(`/transactions/${lastInvoice.id}/invoice`, `${lastInvoice.invoiceNumber}.pdf`)}
+                className="text-green-700 font-medium hover:underline"
+              >
+                View Invoice
+              </button>
+              <button onClick={() => setLastInvoice(null)} className="text-green-500 hover:text-green-700">
+                <X size={16} />
+              </button>
+            </div>
           </div>
         )}
 
