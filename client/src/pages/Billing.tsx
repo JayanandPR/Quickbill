@@ -19,6 +19,7 @@ export default function Billing() {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [error, setError] = useState('');
   const [lastInvoice, setLastInvoice] = useState<string | null>(null);
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
 
   // Search products (debounced)
   useEffect(() => {
@@ -79,6 +80,23 @@ export default function Billing() {
   function removeFromCart(productId: string) {
     setCart((prev) => prev.filter((item) => item.product.id !== productId));
   }
+
+  function commitQuantity(productId: string) {
+  const draft = quantityDrafts[productId];
+  setQuantityDrafts((prev) => {
+    const copy = { ...prev };
+    delete copy[productId];
+    return copy;
+  });
+  if (draft === undefined) return;
+
+  const parsed = parseInt(draft, 10);
+  const clamped = isNaN(parsed) || parsed < 1 ? 1 : parsed;
+
+  setCart((prev) =>
+    prev.map((item) => (item.product.id === productId ? { ...item, quantity: clamped } : item))
+  );
+}
 
   // Totals — mirrors the backend calculation so the cashier sees the same numbers
   const subtotalCents = cart.reduce(
@@ -199,7 +217,22 @@ export default function Billing() {
                         >
                           <Minus size={12} />
                         </button>
-                        <span className="w-6 text-center">{item.quantity}</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={quantityDrafts[item.product.id] ?? String(item.quantity)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (/^\d*$/.test(val)) {
+                              setQuantityDrafts((prev) => ({ ...prev, [item.product.id]: val }));
+                            }
+                          }}
+                          onBlur={() => commitQuantity(item.product.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                          }}
+                          className="w-10 text-center border border-gray-200 rounded px-1 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
                         <button
                           onClick={() => updateQuantity(item.product.id, 1)}
                           className="w-6 h-6 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50"

@@ -144,6 +144,7 @@ export interface VendorBill {
   billNumber: string;
   vendorInvoiceNumber: string;
   vendorId: string;
+  vendor?: { name: string };
   items: VendorBillItem[];
   subtotalCents: number;
   taxCents: number;
@@ -159,4 +160,14 @@ export interface PurchaseCartItem {
   product: Product;
   quantity: number;
   unitCostCents: number; // editable — may differ from product's stored cost price
+}
+
+export interface VendorBillsResponse {
+  bills: VendorBill[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }

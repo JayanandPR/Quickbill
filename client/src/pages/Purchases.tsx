@@ -1,10 +1,30 @@
-import { useEffect, useState } from 'react';
-import { Search, Plus, Minus, Trash2, PackagePlus, X } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { Search, Plus, Minus, Trash2, PackagePlus, X, History, ShoppingCart, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import api from '../lib/api';
 import { centsToDisplay, displayToCents } from '../lib/currency';
-import type { Product, Vendor, PurchaseCartItem, BillPaymentStatus } from '../types';
+import type { Product, Vendor, PurchaseCartItem, BillPaymentStatus, VendorBill, VendorBillsResponse } from '../types';
+import Pagination from '../components/Pagination';
+
+type View = 'record' | 'history';
 
 export default function Purchases() {
+  const [view, setView] = useState<View>('record');
+
+  return (
+    <div className="p-8 h-[calc(100vh-4rem)]">
+      {view === 'record' ? (
+        <RecordPurchaseView setView={setView} />
+      ) : (
+        <PurchaseHistoryView setView={setView} />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────
+// RECORD PURCHASE
+// ─────────────────────────────
+function RecordPurchaseView({ setView }: { setView: (v: View) => void }) {
   const [search, setSearch] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<PurchaseCartItem[]>([]);
@@ -14,17 +34,16 @@ export default function Purchases() {
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [showVendorDropdown, setShowVendorDropdown] = useState(false);
 
+  const [vendorInvoiceNumber, setVendorInvoiceNumber] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
+  const [dueDate, setDueDate] = useState('');
   const [taxAmount, setTaxAmount] = useState('0');
   const [paymentStatus, setPaymentStatus] = useState<BillPaymentStatus>('UNPAID');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [lastBillNumber, setLastBillNumber] = useState<string | null>(null);
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
 
-  const [vendorInvoiceNumber, setVendorInvoiceNumber] = useState('');
-  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
-  const [dueDate, setDueDate] = useState('');
-
-  // Search products (debounced)
   useEffect(() => {
     const timeout = setTimeout(async () => {
       if (!search) {
@@ -37,7 +56,6 @@ export default function Purchases() {
     return () => clearTimeout(timeout);
   }, [search]);
 
-  // Search vendors (debounced)
   useEffect(() => {
     const timeout = setTimeout(async () => {
       if (!vendorSearch) {
@@ -58,7 +76,6 @@ export default function Purchases() {
           item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-      // Default the purchase cost to the product's stored cost price — editable per line
       return [...prev, { product, quantity: 1, unitCostCents: product.costPriceCents }];
     });
     setSearch('');
@@ -76,6 +93,23 @@ export default function Purchases() {
         .filter((item) => item.quantity > 0)
     );
   }
+
+  function commitQuantity(productId: string) {
+  const draft = quantityDrafts[productId];
+  setQuantityDrafts((prev) => {
+    const copy = { ...prev };
+    delete copy[productId];
+    return copy;
+  });
+  if (draft === undefined) return;
+
+  const parsed = parseInt(draft, 10);
+  const clamped = isNaN(parsed) || parsed < 1 ? 1 : parsed;
+
+  setCart((prev) =>
+    prev.map((item) => (item.product.id === productId ? { ...item, quantity: clamped } : item))
+  );
+}
 
   function updateUnitCost(productId: string, displayValue: string) {
     setCart((prev) =>
@@ -101,12 +135,12 @@ export default function Purchases() {
       setError('Please select a vendor');
       return;
     }
-    if (cart.length === 0) {
-      setError('Add at least one product to the purchase');
+    if (!vendorInvoiceNumber.trim()) {
+      setError("Please enter the vendor's invoice number");
       return;
     }
-    if (!vendorInvoiceNumber.trim()) {
-      setError('Please enter the vendor\'s invoice number');
+    if (cart.length === 0) {
+      setError('Add at least one product to the purchase');
       return;
     }
     setIsSubmitting(true);
@@ -128,11 +162,11 @@ export default function Purchases() {
       setCart([]);
       setSelectedVendor(null);
       setVendorSearch('');
-      setTaxAmount('0');
-      setPaymentStatus('UNPAID');
       setVendorInvoiceNumber('');
       setPurchaseDate(new Date().toISOString().split('T')[0]);
       setDueDate('');
+      setTaxAmount('0');
+      setPaymentStatus('UNPAID');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to record purchase. Please try again.');
     } finally {
@@ -141,12 +175,21 @@ export default function Purchases() {
   }
 
   return (
-    <div className="p-8 flex gap-6 h-[calc(100vh-4rem)]">
+    <div className="flex gap-6 h-full">
       {/* Left: product search + cart */}
-      <div className="flex-1 flex flex-col">
-        <h1 className="text-2xl font-semibold text-gray-800 mb-4">Record Purchase</h1>
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex items-center gap-4 mb-4 shrink-0">
+          <h1 className="text-2xl font-semibold text-gray-800">Record Purchase</h1>
+          <button
+            onClick={() => setView('history')}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-md text-gray-600 hover:bg-gray-50"
+          >
+            <History size={16} />
+            Purchase History
+          </button>
+        </div>
 
-        <div className="relative mb-4">
+        <div className="relative mb-4 shrink-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
@@ -158,7 +201,7 @@ export default function Purchases() {
         </div>
 
         {products.length > 0 && (
-          <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-50 mb-4 max-h-72 overflow-y-auto">
+          <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-50 mb-4 max-h-72 overflow-y-auto shrink-0">
             {products.map((product) => (
               <button
                 key={product.id}
@@ -180,7 +223,7 @@ export default function Purchases() {
         )}
 
         {lastBillNumber && (
-          <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-md px-4 py-3 mb-4 flex items-center justify-between">
+          <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-md px-4 py-3 mb-4 flex items-center justify-between shrink-0">
             <span>Purchase recorded — Bill {lastBillNumber}</span>
             <button onClick={() => setLastBillNumber(null)} className="text-green-500 hover:text-green-700">
               <X size={16} />
@@ -188,7 +231,7 @@ export default function Purchases() {
           </div>
         )}
 
-        <div className="flex-1 bg-white rounded-lg border border-gray-200 overflow-y-auto">
+        <div className="flex-1 bg-white rounded-lg border border-gray-200 overflow-y-auto min-h-0">
           {cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-gray-300">
               <PackagePlus size={40} />
@@ -226,7 +269,22 @@ export default function Purchases() {
                         >
                           <Minus size={12} />
                         </button>
-                        <span className="w-6 text-center">{item.quantity}</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={quantityDrafts[item.product.id] ?? String(item.quantity)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (/^\d*$/.test(val)) {
+                              setQuantityDrafts((prev) => ({ ...prev, [item.product.id]: val }));
+                            }
+                          }}
+                          onBlur={() => commitQuantity(item.product.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                          }}
+                          className="w-10 text-center border border-gray-200 rounded px-1 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
                         <button
                           onClick={() => updateQuantity(item.product.id, 1)}
                           className="w-6 h-6 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50"
@@ -255,10 +313,9 @@ export default function Purchases() {
       </div>
 
       {/* Right: purchase summary panel */}
-      <div className="w-80 shrink-0 bg-white rounded-lg border border-gray-200 p-5 flex flex-col">
-        <h2 className="text-sm font-semibold text-gray-800 mb-3">Purchase Details</h2>
+      <div className="w-80 shrink-0 bg-white rounded-lg border border-gray-200 p-5 flex flex-col overflow-y-auto">
+        <h2 className="text-sm font-semibold text-gray-800 mb-3 shrink-0">Purchase Details</h2>
 
-        {/* Vendor picker */}
         <div className="mb-4 relative">
           <label className="block text-xs font-medium text-gray-500 mb-1">Vendor</label>
           {selectedVendor ? (
@@ -303,11 +360,8 @@ export default function Purchases() {
           )}
         </div>
 
-        {/* Vendor invoice number */}
         <div className="mb-4">
-          <label className="block text-xs font-medium text-gray-500 mb-1">
-            Vendor Invoice Number
-          </label>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Vendor Invoice Number</label>
           <input
             value={vendorInvoiceNumber}
             onChange={(e) => setVendorInvoiceNumber(e.target.value)}
@@ -319,7 +373,6 @@ export default function Purchases() {
           </p>
         </div>
 
-        {/* Purchase date */}
         <div className="mb-4">
           <label className="block text-xs font-medium text-gray-500 mb-1">Purchase Date</label>
           <input
@@ -330,7 +383,6 @@ export default function Purchases() {
           />
         </div>
 
-        {/* Payment status */}
         <div className="mb-4">
           <label className="block text-xs font-medium text-gray-500 mb-1">Payment Status</label>
           <div className="grid grid-cols-2 gap-2">
@@ -354,6 +406,7 @@ export default function Purchases() {
               : 'Recorded as Accounts Payable (owed to vendor)'}
           </p>
         </div>
+
         {paymentStatus === 'UNPAID' && (
           <div className="mb-4">
             <label className="block text-xs font-medium text-gray-500 mb-1">Due Date</label>
@@ -366,7 +419,6 @@ export default function Purchases() {
           </div>
         )}
 
-        {/* Tax */}
         <div className="mb-4">
           <label className="block text-xs font-medium text-gray-500 mb-1">Tax Amount (₹)</label>
           <input
@@ -378,8 +430,7 @@ export default function Purchases() {
           />
         </div>
 
-        {/* Totals */}
-        <div className="border-t border-gray-100 pt-3 space-y-1.5 text-sm">
+        <div className="border-t border-gray-100 pt-3 space-y-1.5 text-sm shrink-0">
           <div className="flex justify-between text-gray-500">
             <span>Subtotal</span>
             <span>₹{centsToDisplay(subtotalCents)}</span>
@@ -394,16 +445,173 @@ export default function Purchases() {
           </div>
         </div>
 
-        {error && <p className="text-red-500 text-xs mt-3">{error}</p>}
+        {error && <p className="text-red-500 text-xs mt-3 shrink-0">{error}</p>}
 
         <button
           onClick={handleSubmit}
           disabled={isSubmitting || cart.length === 0}
-          className="mt-4 w-full bg-blue-600 text-white py-2.5 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+          className="mt-4 w-full bg-blue-600 text-white py-2.5 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 shrink-0"
         >
           {isSubmitting ? 'Recording...' : 'Record Purchase'}
         </button>
       </div>
     </div>
+  );
+}
+
+// ─────────────────────────────
+// PURCHASE HISTORY
+// ─────────────────────────────
+function PurchaseHistoryView({ setView }: { setView: (v: View) => void }) {
+  const [bills, setBills] = useState<VendorBill[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1, limit: 10 });
+
+  const loadBills = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<VendorBillsResponse>('/vendor-bills', {
+        params: { page: String(page), limit: '10' },
+      });
+      setBills(res.data.bills);
+      setPagination(res.data.pagination);
+    } catch (err) {
+      console.error('Failed to load purchase history', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page]);
+
+  useEffect(() => {
+    loadBills();
+  }, [loadBills]);
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-4 mb-4 shrink-0">
+        <h1 className="text-2xl font-semibold text-gray-800">Purchase History</h1>
+        <button
+          onClick={() => setView('record')}
+          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-md text-gray-600 hover:bg-gray-50"
+        >
+          <ShoppingCart size={16} />
+          Record Purchase
+        </button>
+      </div>
+
+      <div className="flex-1 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden min-h-0">
+        <div className="flex-1 overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-left text-gray-500 sticky top-0 bg-white">
+                <th className="px-5 py-3 font-medium">Bill No.</th>
+                <th className="px-5 py-3 font-medium">Vendor Invoice</th>
+                <th className="px-5 py-3 font-medium">Vendor</th>
+                <th className="px-5 py-3 font-medium">Purchase Date</th>
+                <th className="px-5 py-3 font-medium">Total</th>
+                <th className="px-5 py-3 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-6 text-center text-gray-400">
+                    Loading...
+                  </td>
+                </tr>
+              ) : bills.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-6 text-center text-gray-400">
+                    No purchases recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                bills.map((bill) => (
+                  <tr key={bill.id} className="border-b border-gray-50 last:border-0 align-top">
+                    <td className="px-5 py-3 text-gray-800 font-medium">{bill.billNumber}</td>
+                    <td className="px-5 py-3 text-gray-500">{bill.vendorInvoiceNumber}</td>
+                    <td className="px-5 py-3 text-gray-700">{bill.vendor?.name ?? '—'}</td>
+                    <td className="px-5 py-3 text-gray-500">
+                      {new Date(bill.purchaseDate).toLocaleDateString()}
+                    </td>
+                    <td className="px-5 py-3 text-gray-800 font-medium">
+                      ₹{centsToDisplay(bill.grandTotalCents)}
+                    </td>
+                    <td className="px-5 py-3">
+                      <PaymentStatusBadge bill={bill} />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <Pagination
+          page={page}
+          totalPages={pagination.totalPages}
+          total={pagination.total}
+          limit={pagination.limit}
+          onPageChange={setPage}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────
+// Payment status + due-date alert badge
+// ─────────────────────────────
+function PaymentStatusBadge({ bill }: { bill: VendorBill }) {
+  if (bill.paymentStatus === 'PAID') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-green-50 text-green-700">
+        <CheckCircle2 size={12} />
+        Paid
+      </span>
+    );
+  }
+
+  // UNPAID — check due date to decide the alert color
+  if (!bill.dueDate) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+        <Clock size={12} />
+        On Credit
+      </span>
+    );
+  }
+
+  const due = new Date(bill.dueDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+
+  const daysUntilDue = Math.round((due.getTime() - today.getTime()) / 86400000);
+
+  if (daysUntilDue < 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-red-50 text-red-600">
+        <AlertTriangle size={12} />
+        Overdue by {Math.abs(daysUntilDue)}d
+      </span>
+    );
+  }
+
+  if (daysUntilDue <= 3) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-yellow-50 text-yellow-700">
+        <Clock size={12} />
+        Due in {daysUntilDue}d
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+      <Clock size={12} />
+      Due {due.toLocaleDateString()}
+    </span>
   );
 }
