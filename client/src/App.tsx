@@ -13,6 +13,7 @@ import Vendors from './pages/Vendors';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Purchases from './pages/Purchases';
+import Sales from './pages/Sales';
 
 function App() {
   return (
@@ -89,6 +90,15 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['ADMIN']}>
                   <Purchases />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/sales"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN']}>
+                  <Sales />
                 </ProtectedRoute>
               }
             />
