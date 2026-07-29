@@ -61,6 +61,10 @@ export default function Sidebar() {
               <Truck size={18} />
               Vendors
             </NavLink>
+            <NavLink to="/expenses" className={navItemClass}>
+              <Receipt size={18} />
+              Expenses
+            </NavLink>
 
             <div className="pt-4 pb-1 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">
               Admin

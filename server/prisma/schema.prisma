@@ -50,6 +50,7 @@ model Account {
   type      AccountType
   createdAt DateTime    @default(now())
   journalLines JournalLine[]
+  expenses  Expense[]
 }
 
 // ─────────────────────────────
@@ -65,6 +66,7 @@ model JournalEntry {
   lines         JournalLine[]
   createdAt     DateTime      @default(now())
   vendorBill    VendorBill?
+  expense       Expense?
 }
 
 model JournalLine {
@@ -244,4 +246,23 @@ model VendorBillItem {
   quantity       Int
   unitCostCents  Int
   lineTotalCents Int
+}
+
+// ─────────────────────────────
+// EXPENSES
+// ─────────────────────────────
+
+model Expense {
+  id             String            @id @default(uuid())
+  category       String            // free-text label, e.g. "Priya's July salary"
+  accountId      String
+  account        Account           @relation(fields: [accountId], references: [id])
+  amountCents    Int
+  expenseDate    DateTime          @default(now())
+  paymentStatus  BillPaymentStatus @default(UNPAID)
+  dueDate        DateTime?
+  note           String?
+  journalEntryId String?           @unique
+  journalEntry   JournalEntry?     @relation(fields: [journalEntryId], references: [id])
+  createdAt      DateTime          @default(now())
 }

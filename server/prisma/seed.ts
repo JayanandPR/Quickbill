@@ -13,6 +13,10 @@ async function main() {
     { code: '4000', name: 'Sales Revenue', type: 'REVENUE' as const },
     { code: '5000', name: 'Cost of Goods Sold', type: 'EXPENSE' as const },
     { code: '5100', name: 'Discounts Given', type: 'EXPENSE' as const },
+    { code: '5200', name: 'Salaries & Wages', type: 'EXPENSE' as const },
+    { code: '5300', name: 'Rent Expense', type: 'EXPENSE' as const },
+    { code: '5400', name: 'Utilities Expense', type: 'EXPENSE' as const },
+    { code: '5500', name: 'Miscellaneous Expense', type: 'EXPENSE' as const },
   ];
 
   for (const account of accounts) {

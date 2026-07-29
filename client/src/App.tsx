@@ -14,6 +14,8 @@ import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Purchases from './pages/Purchases';
 import Sales from './pages/Sales';
+import Expenses from './pages/Expenses';
+
 
 function App() {
   return (
@@ -99,6 +101,15 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['ADMIN']}>
                   <Sales />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/expenses"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN']}>
+                  <Expenses />
                 </ProtectedRoute>
               }
             />

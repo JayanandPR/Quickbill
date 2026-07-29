@@ -171,3 +171,23 @@ export interface VendorBillsResponse {
     totalPages: number;
   };
 }
+
+export type ExpenseAccountCode = '5200' | '5300' | '5400' | '5500';
+
+export interface Expense {
+  id: string;
+  category: string;
+  accountId: string;
+  account?: { code: string; name: string };
+  amountCents: number;
+  expenseDate: string;
+  paymentStatus: BillPaymentStatus;
+  dueDate?: string;
+  note?: string;
+  createdAt: string;
+}
+
+export interface ExpensesResponse {
+  expenses: Expense[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+}

@@ -20,6 +20,12 @@ interface VendorBillForLedger {
   paymentStatus: 'PAID' | 'UNPAID';
 }
 
+interface ExpenseForLedger {
+  accountCode: string;
+  amountCents: number;
+  paymentStatus: 'PAID' | 'UNPAID';
+}
+
 /**
  * Builds the balanced debit/credit lines for a single retail sale.
  *
@@ -112,6 +118,32 @@ export function buildVendorBillJournalLines(bill: VendorBillForLedger): JournalL
     lines.push({ accountCode: '1000', debitCents: 0, creditCents: bill.grandTotalCents });
   } else {
     lines.push({ accountCode: '2000', debitCents: 0, creditCents: bill.grandTotalCents });
+  }
+
+  return lines;
+}
+
+/**
+ * Builds the balanced debit/credit lines for a standalone business expense
+ * (salaries, rent, utilities, etc.) — not tied to inventory, unlike vendor bills.
+ *
+ * Paid immediately:
+ *   Debit  [Expense Account]     amount
+ *   Credit Cash                        amount
+ *
+ * On credit (owed):
+ *   Debit  [Expense Account]     amount
+ *   Credit Accounts Payable            amount
+ */
+export function buildExpenseJournalLines(expense: ExpenseForLedger): JournalLineInput[] {
+  const lines: JournalLineInput[] = [];
+
+  lines.push({ accountCode: expense.accountCode, debitCents: expense.amountCents, creditCents: 0 });
+
+  if (expense.paymentStatus === 'PAID') {
+    lines.push({ accountCode: '1000', debitCents: 0, creditCents: expense.amountCents });
+  } else {
+    lines.push({ accountCode: '2000', debitCents: 0, creditCents: expense.amountCents });
   }
 
   return lines;

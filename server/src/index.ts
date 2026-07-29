@@ -13,6 +13,7 @@ import reportRoutes from './routes/report.routes';
 import auditRoutes from './routes/audit.routes';
 import vendorBillRoutes from './routes/vendorBill.routes';
 import { errorHandler } from './middleware/errorHandler.middleware';
+import expenseRoutes from './routes/expense.routes';
 
 dotenv.config();
 
@@ -40,6 +41,7 @@ app.use('/api/vendors', vendorRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/vendor-bills', vendorBillRoutes);
+app.use('/api/expenses', expenseRoutes);
 
 app.use(errorHandler);
 
