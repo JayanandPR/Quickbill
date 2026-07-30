@@ -19,7 +19,18 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = [
+  'http://localhost:5173', // local dev
+  process.env.CLIENT_URL, // production frontend (set in Render dashboard)
+].filter((origin): origin is string => Boolean(origin));
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 
 app.get('/', (req: Request, res: Response) => {
