@@ -6,7 +6,7 @@ import api from './api';
  * Using a blob + object URL keeps the auth token in the Authorization
  * header rather than exposing it in a plain URL.
  */
-export async function viewInvoice(url: string, fallbackFilename: string) {
+export async function viewInvoice(url: string, _fallbackFilename: string) {
   try {
     const res = await api.get(url, { responseType: 'blob' });
     const blobUrl = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
