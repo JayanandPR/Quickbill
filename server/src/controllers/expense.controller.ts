@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { buildExpenseJournalLines, resolveAndValidateLines } from '../lib/ledger';
 
-const EXPENSE_ACCOUNT_CODES = ['5200', '5300', '5400', '5500'] as const;
+const EXPENSE_ACCOUNT_CODES = [
+  '5200', '5300', '5400', '5500', '5600', '5700', '5800', '5900', '6000', '6100',
+] as const;
 
 const createExpenseSchema = z.object({
   category: z.string().min(2, 'Category is required'),

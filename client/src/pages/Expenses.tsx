@@ -7,10 +7,17 @@ import Pagination from '../components/Pagination';
 
 type View = 'record' | 'history';
 
-const SUGGESTIONS: { label: string; accountCode: ExpenseAccountCode }[] = [
+const EXPENSE_CATEGORIES: { label: string; accountCode: ExpenseAccountCode }[] = [
   { label: 'Salaries & Wages', accountCode: '5200' },
   { label: 'Rent Expense', accountCode: '5300' },
   { label: 'Utilities Expense', accountCode: '5400' },
+  { label: 'Marketing & Advertising', accountCode: '5600' },
+  { label: 'Transport & Delivery', accountCode: '5700' },
+  { label: 'Packaging & Supplies', accountCode: '5800' },
+  { label: 'Equipment & Maintenance', accountCode: '5900' },
+  { label: 'Bank & Payment Gateway Fees', accountCode: '6000' },
+  { label: 'Insurance', accountCode: '6100' },
+  { label: 'Miscellaneous Expense', accountCode: '5500' },
 ];
 
 export default function Expenses() {
@@ -31,7 +38,7 @@ export default function Expenses() {
 // RECORD EXPENSE
 // ─────────────────────────────
 function RecordExpenseView({ setView }: { setView: (v: View) => void }) {
-  const [category, setCategory] = useState('');
+  
   const [accountCode, setAccountCode] = useState<ExpenseAccountCode>('5500'); // Miscellaneous default
   const [amount, setAmount] = useState('');
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
@@ -42,28 +49,23 @@ function RecordExpenseView({ setView }: { setView: (v: View) => void }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  function pickSuggestion(s: { label: string; accountCode: ExpenseAccountCode }) {
-    setCategory(s.label);
-    setAccountCode(s.accountCode);
-  }
+  
 
   async function handleSubmit() {
     setError('');
     setSuccess('');
-    if (!category.trim()) {
-      setError('Please enter a category for this expense');
-      return;
-    }
     const amountCents = displayToCents(amount);
     if (amountCents <= 0) {
       setError('Please enter a valid amount');
       return;
     }
 
+    const selectedCategory = EXPENSE_CATEGORIES.find((c) => c.accountCode === accountCode)!;
+
     setIsSubmitting(true);
     try {
       await api.post('/expenses', {
-        category,
+        category: selectedCategory.label,
         accountCode,
         amountCents,
         expenseDate,
@@ -71,8 +73,7 @@ function RecordExpenseView({ setView }: { setView: (v: View) => void }) {
         dueDate: paymentStatus === 'UNPAID' ? dueDate || undefined : undefined,
         note: note || undefined,
       });
-      setSuccess(`Recorded "${category}" — ₹${amount}`);
-      setCategory('');
+      setSuccess(`Recorded "${selectedCategory.label}" — ₹${amount}`);
       setAccountCode('5500');
       setAmount('');
       setExpenseDate(new Date().toISOString().split('T')[0]);
@@ -102,30 +103,17 @@ function RecordExpenseView({ setView }: { setView: (v: View) => void }) {
       <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-          <input
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder="e.g. Priya's July salary, Office WiFi bill..."
+          <select
+            value={accountCode}
+            onChange={(e) => setAccountCode(e.target.value as ExpenseAccountCode)}
             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <div className="flex gap-2 mt-2">
-            {SUGGESTIONS.map((s) => (
-              <button
-                key={s.accountCode}
-                onClick={() => pickSuggestion(s)}
-                className={`text-xs px-2.5 py-1 rounded-full border ${
-                  accountCode === s.accountCode && category === s.label
-                    ? 'bg-blue-50 border-blue-200 text-blue-700'
-                    : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-                }`}
-              >
-                {s.label}
-              </button>
+          >
+            {EXPENSE_CATEGORIES.map((c) => (
+              <option key={c.accountCode} value={c.accountCode}>
+                {c.label}
+              </option>
             ))}
-          </div>
-          <p className="text-xs text-gray-400 mt-1.5">
-            Custom entries are recorded under Miscellaneous Expense unless you pick a suggestion above
-          </p>
+          </select>
         </div>
 
         <div>
@@ -187,6 +175,7 @@ function RecordExpenseView({ setView }: { setView: (v: View) => void }) {
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
+            placeholder="e.g. Priya's July salary, Office WiFi bill..."
             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>

@@ -17,6 +17,12 @@ async function main() {
     { code: '5300', name: 'Rent Expense', type: 'EXPENSE' as const },
     { code: '5400', name: 'Utilities Expense', type: 'EXPENSE' as const },
     { code: '5500', name: 'Miscellaneous Expense', type: 'EXPENSE' as const },
+    { code: '5600', name: 'Marketing & Advertising', type: 'EXPENSE' as const },
+    { code: '5700', name: 'Transport & Delivery', type: 'EXPENSE' as const },
+    { code: '5800', name: 'Packaging & Supplies', type: 'EXPENSE' as const },
+    { code: '5900', name: 'Equipment & Maintenance', type: 'EXPENSE' as const },
+    { code: '6000', name: 'Bank & Payment Gateway Fees', type: 'EXPENSE' as const },
+    { code: '6100', name: 'Insurance', type: 'EXPENSE' as const },
   ];
 
   for (const account of accounts) {

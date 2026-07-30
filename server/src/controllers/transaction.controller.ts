@@ -104,8 +104,11 @@ export async function createSale(req: Request, res: Response) {
           where: { id: item.productId },
           data: { stockQuantity: { decrement: item.quantity } },
         });
+      }
 
-        // 5. Build and validate the double-entry ledger lines for this sale
+      // 5. Build and validate the double-entry ledger lines for this sale —
+      // done ONCE per sale, outside the stock-decrement loop, since a sale
+      // only ever produces one journal entry regardless of item count
       const rawLines = buildSaleJournalLines({
         subtotalCents,
         taxCents,
@@ -125,7 +128,6 @@ export async function createSale(req: Request, res: Response) {
           lines: { create: resolvedLines },
         },
       });
-      }
 
       return createdTransaction;
     });
@@ -145,12 +147,18 @@ export async function getTransactions(req: Request, res: Response) {
   const limitNum = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 10));
   const skip = (pageNum - 1) * limitNum;
 
+  let toDate: Date | undefined;
+  if (to) {
+    toDate = new Date(String(to));
+    toDate.setHours(23, 59, 59, 999);
+  }
+
   const where = {
     ...(from || to
       ? {
           createdAt: {
             ...(from && { gte: new Date(String(from)) }),
-            ...(to && { lte: new Date(String(to)) }),
+            ...(toDate && { lte: toDate }),
           },
         }
       : {}),

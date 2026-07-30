@@ -172,7 +172,8 @@ export interface VendorBillsResponse {
   };
 }
 
-export type ExpenseAccountCode = '5200' | '5300' | '5400' | '5500';
+export type ExpenseAccountCode =
+  | '5200' | '5300' | '5400' | '5500' | '5600' | '5700' | '5800' | '5900' | '6000' | '6100';
 
 export interface Expense {
   id: string;

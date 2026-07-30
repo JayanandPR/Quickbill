@@ -50,13 +50,19 @@ export async function getTrialBalance(req: Request, res: Response) {
 export async function getProfitAndLoss(req: Request, res: Response) {
   const { from, to } = req.query;
 
+  let toDate: Date | undefined;
+  if (to) {
+    toDate = new Date(String(to));
+    toDate.setHours(23, 59, 59, 999);
+  }
+
   const dateFilter =
     from || to
       ? {
           journalEntry: {
             createdAt: {
               ...(from && { gte: new Date(String(from)) }),
-              ...(to && { lte: new Date(String(to)) }),
+              ...(toDate && { lte: toDate }),
             },
           },
         }
@@ -107,8 +113,14 @@ export async function getProfitAndLoss(req: Request, res: Response) {
 export async function getBalanceSheet(req: Request, res: Response) {
   const { asOf } = req.query;
 
-  const dateFilter = asOf
-    ? { journalEntry: { createdAt: { lte: new Date(String(asOf)) } } }
+  let asOfDate: Date | undefined;
+  if (asOf) {
+    asOfDate = new Date(String(asOf));
+    asOfDate.setHours(23, 59, 59, 999);
+  }
+
+  const dateFilter = asOfDate
+    ? { journalEntry: { createdAt: { lte: asOfDate } } }
     : {};
 
   const [assetAccounts, liabilityAccounts, equityAccounts, revenueAccounts, expenseAccounts] =
@@ -180,6 +192,12 @@ export async function getBalanceSheet(req: Request, res: Response) {
 export async function getSalesReport(req: Request, res: Response) {
   const { from, to, groupBy = 'day' } = req.query;
 
+  let toDate: Date | undefined;
+  if (to) {
+    toDate = new Date(String(to));
+    toDate.setHours(23, 59, 59, 999);
+  }
+
   const transactions = await prisma.transaction.findMany({
     where: {
       status: 'COMPLETED',
@@ -187,7 +205,7 @@ export async function getSalesReport(req: Request, res: Response) {
         ? {
             createdAt: {
               ...(from && { gte: new Date(String(from)) }),
-              ...(to && { lte: new Date(String(to)) }),
+              ...(toDate && { lte: toDate }),
             },
           }
         : {}),
