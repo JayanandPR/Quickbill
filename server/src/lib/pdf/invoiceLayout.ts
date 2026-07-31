@@ -10,10 +10,10 @@ export interface LineItem {
 export interface InvoiceData {
   documentTitle: string; // "SALES INVOICE" or "PURCHASE INVOICE"
   invoiceNumber: string;
-  secondaryReference?: { label: string; value: string }; // e.g. vendor's own invoice no.
+  secondaryReference?: { label: string; value: string };
   date: Date;
   dueDate?: Date;
-  partyLabel: string; // "Billed To" or "Purchased From"
+  partyLabel: string;
   partyName: string;
   items: LineItem[];
   subtotalCents: number;
@@ -23,6 +23,10 @@ export interface InvoiceData {
   footerNote?: string;
 }
 
+const PAGE_LEFT = 50;
+const PAGE_RIGHT = 545;
+const PAGE_WIDTH = PAGE_RIGHT - PAGE_LEFT;
+
 function formatCurrency(cents: number): string {
   return `Rs. ${(cents / 100).toFixed(2)}`;
 }
@@ -31,92 +35,148 @@ function formatDate(date: Date): string {
   return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-/**
- * Builds a simple, clean invoice PDF and streams it into the given writable
- * stream (typically the HTTP response). Kept deliberately plain for now —
- * a company header/logo can be added later inside this one function without
- * touching the two endpoint controllers that call it.
- */
 export function generateInvoicePdf(data: InvoiceData, stream: NodeJS.WritableStream) {
   const doc = new PDFDocument({ size: 'A4', margin: 50 });
   doc.pipe(stream);
 
-  // Header
-  doc.fontSize(18).font('Helvetica-Bold').text('QuickBill', 50, 50);
-  doc.fontSize(10).font('Helvetica').fillColor('#666').text('Retail & Accounting', 50, 72);
+  // ── Shop header (centered) ──────────────────────────
+  doc.fontSize(22).font('Helvetica-Bold').fillColor('#1a1a1a')
+    .text('QuickBill', PAGE_LEFT, 50, { width: PAGE_WIDTH, align: 'center' });
+  doc.fontSize(9).font('Helvetica').fillColor('#777')
+    .text('Retail & Accounting', PAGE_LEFT, 76, { width: PAGE_WIDTH, align: 'center' });
 
-  doc.fontSize(16).font('Helvetica-Bold').fillColor('#000').text(data.documentTitle, 50, 110);
+  // Thick rule under the header
+  doc.moveTo(PAGE_LEFT, 100).lineTo(PAGE_RIGHT, 100).lineWidth(1.5).strokeColor('#1a1a1a').stroke();
 
-  // Invoice meta (right-aligned block)
-  const metaTop = 50;
-  doc.fontSize(10).font('Helvetica').fillColor('#000');
-  doc.text(`Invoice No: ${data.invoiceNumber}`, 350, metaTop, { align: 'right' });
+  // Document title banner
+  doc.fontSize(13).font('Helvetica-Bold').fillColor('#1a1a1a')
+    .text(data.documentTitle, PAGE_LEFT, 112, { width: PAGE_WIDTH, align: 'center', characterSpacing: 1 });
+
+  // ── Info box: invoice meta (left) + party info (right) ──────────────────────────
+  const infoTop = 145;
+  const infoBoxHeight = 80;
+  doc.rect(PAGE_LEFT, infoTop, PAGE_WIDTH, infoBoxHeight).strokeColor('#ccc').lineWidth(0.75).stroke();
+  // vertical divider
+  const dividerX = PAGE_LEFT + PAGE_WIDTH / 2;
+  doc.moveTo(dividerX, infoTop).lineTo(dividerX, infoTop + infoBoxHeight).strokeColor('#ccc').stroke();
+
+  // Left: party info
+  const leftPad = PAGE_LEFT + 12;
+  doc.fontSize(8).font('Helvetica-Bold').fillColor('#888')
+    .text(data.partyLabel.toUpperCase(), leftPad, infoTop + 12);
+  doc.fontSize(11).font('Helvetica-Bold').fillColor('#1a1a1a')
+    .text(data.partyName, leftPad, infoTop + 26);
+
+  // Right: invoice meta
+  const rightPad = dividerX + 12;
+  let metaY = infoTop + 12;
+  doc.fontSize(9).font('Helvetica').fillColor('#555');
+  doc.font('Helvetica-Bold').text('Invoice No: ', rightPad, metaY, { continued: true });
+  doc.font('Helvetica').text(data.invoiceNumber);
+  metaY += 15;
+
   if (data.secondaryReference) {
-    doc.text(`${data.secondaryReference.label}: ${data.secondaryReference.value}`, 350, metaTop + 15, {
-      align: 'right',
-    });
+    doc.font('Helvetica-Bold').text(`${data.secondaryReference.label}: `, rightPad, metaY, { continued: true });
+    doc.font('Helvetica').text(data.secondaryReference.value);
+    metaY += 15;
   }
-  doc.text(`Date: ${formatDate(data.date)}`, 350, metaTop + 30, { align: 'right' });
+
+  doc.font('Helvetica-Bold').text('Date: ', rightPad, metaY, { continued: true });
+  doc.font('Helvetica').text(formatDate(data.date));
+  metaY += 15;
+
   if (data.dueDate) {
-    doc.text(`Due Date: ${formatDate(data.dueDate)}`, 350, metaTop + 45, { align: 'right' });
+    doc.font('Helvetica-Bold').text('Due Date: ', rightPad, metaY, { continued: true });
+    doc.font('Helvetica').text(formatDate(data.dueDate));
   }
 
-  // Party info
-  doc.moveTo(50, 140).lineTo(545, 140).strokeColor('#ddd').stroke();
-  doc.fontSize(10).font('Helvetica-Bold').text(data.partyLabel, 50, 155);
-  doc.font('Helvetica').text(data.partyName, 50, 170);
+  // ── Line items table ──────────────────────────
+  const tableTop = infoTop + infoBoxHeight + 25;
+  const colSl = PAGE_LEFT;
+  const colItem = PAGE_LEFT + 30;
+  const colQty = 340;
+  const colRate = 400;
+  const colAmount = 465;
 
-  // Table header
-  const tableTop = 210;
-  doc.font('Helvetica-Bold').fontSize(10);
-  doc.text('Item', 50, tableTop);
-  doc.text('Qty', 300, tableTop, { width: 60, align: 'right' });
-  doc.text('Unit Price', 360, tableTop, { width: 90, align: 'right' });
-  doc.text('Total', 460, tableTop, { width: 85, align: 'right' });
-  doc.moveTo(50, tableTop + 15).lineTo(545, tableTop + 15).strokeColor('#000').stroke();
+  // Header row (dark background)
+  doc.rect(PAGE_LEFT, tableTop, PAGE_WIDTH, 22).fillColor('#1a1a1a').fill();
+  doc.fontSize(9).font('Helvetica-Bold').fillColor('#fff');
+  doc.text('#', colSl + 8, tableTop + 6.5);
+  doc.text('Item', colItem, tableTop + 6.5);
+  doc.text('Qty', colQty, tableTop + 6.5, { width: 50, align: 'right' });
+  doc.text('Rate', colRate, tableTop + 6.5, { width: 55, align: 'right' });
+  doc.text('Amount', colAmount, tableTop + 6.5, { width: 80, align: 'right' });
 
-  // Table rows
-  let y = tableTop + 25;
-  doc.font('Helvetica').fontSize(10);
-  for (const item of data.items) {
-    doc.text(item.name, 50, y, { width: 240 });
-    doc.text(String(item.quantity), 300, y, { width: 60, align: 'right' });
-    doc.text(formatCurrency(item.unitPriceCents), 360, y, { width: 90, align: 'right' });
-    doc.text(formatCurrency(item.lineTotalCents), 460, y, { width: 85, align: 'right' });
-    y += 20;
-  }
+  // Rows (alternating shade)
+  let y = tableTop + 22;
+  doc.font('Helvetica').fontSize(9).fillColor('#1a1a1a');
+  data.items.forEach((item, i) => {
+    const rowHeight = 20;
+    if (i % 2 === 1) {
+      doc.rect(PAGE_LEFT, y, PAGE_WIDTH, rowHeight).fillColor('#f7f7f7').fill();
+    }
+    doc.fillColor('#1a1a1a');
+    doc.text(String(i + 1), colSl + 8, y + 5.5);
+    doc.text(item.name, colItem, y + 5.5, { width: colQty - colItem - 10 });
+    doc.text(String(item.quantity), colQty, y + 5.5, { width: 50, align: 'right' });
+    doc.text(formatCurrency(item.unitPriceCents), colRate, y + 5.5, { width: 55, align: 'right' });
+    doc.text(formatCurrency(item.lineTotalCents), colAmount, y + 5.5, { width: 80, align: 'right' });
+    y += rowHeight;
+  });
 
-  doc.moveTo(50, y + 5).lineTo(545, y + 5).strokeColor('#ddd').stroke();
-  y += 20;
+  // Bottom border of table
+  doc.moveTo(PAGE_LEFT, y).lineTo(PAGE_RIGHT, y).strokeColor('#1a1a1a').lineWidth(1).stroke();
+  y += 15;
 
-  // Totals block
-  const totalsX = 360;
-  doc.text('Subtotal', totalsX, y, { width: 90, align: 'right' });
-  doc.text(formatCurrency(data.subtotalCents), 460, y, { width: 85, align: 'right' });
-  y += 18;
+  // ── Totals box (right-aligned) ──────────────────────────
+  const totalsBoxWidth = 220;
+  const totalsBoxX = PAGE_RIGHT - totalsBoxWidth;
+  const totalsLabelWidth = 110;
+  const totalsValueWidth = totalsBoxWidth - totalsLabelWidth;
 
-  doc.text('Tax', totalsX, y, { width: 90, align: 'right' });
-  doc.text(formatCurrency(data.taxCents), 460, y, { width: 85, align: 'right' });
-  y += 18;
+  doc.fontSize(9).font('Helvetica').fillColor('#555');
+  doc.text('Subtotal', totalsBoxX, y, { width: totalsLabelWidth, align: 'left' });
+  doc.text(formatCurrency(data.subtotalCents), totalsBoxX + totalsLabelWidth, y, {
+    width: totalsValueWidth,
+    align: 'right',
+  });
+  y += 16;
+
+  doc.text('Tax', totalsBoxX, y, { width: totalsLabelWidth, align: 'left' });
+  doc.text(formatCurrency(data.taxCents), totalsBoxX + totalsLabelWidth, y, {
+    width: totalsValueWidth,
+    align: 'right',
+  });
+  y += 16;
 
   if (data.discountCents && data.discountCents > 0) {
-    doc.text('Discount', totalsX, y, { width: 90, align: 'right' });
-    doc.text(`-${formatCurrency(data.discountCents)}`, 460, y, { width: 85, align: 'right' });
-    y += 18;
+    doc.text('Discount', totalsBoxX, y, { width: totalsLabelWidth, align: 'left' });
+    doc.text(`-${formatCurrency(data.discountCents)}`, totalsBoxX + totalsLabelWidth, y, {
+      width: totalsValueWidth,
+      align: 'right',
+    });
+    y += 16;
   }
 
-  doc.moveTo(360, y + 2).lineTo(545, y + 2).strokeColor('#000').stroke();
-  y += 10;
-  doc.font('Helvetica-Bold').fontSize(12);
-  doc.text('Total', totalsX, y, { width: 90, align: 'right' });
-  doc.text(formatCurrency(data.grandTotalCents), 460, y, { width: 85, align: 'right' });
+  // Grand total — boxed, filled
+  y += 4;
+  doc.rect(totalsBoxX, y, totalsBoxWidth, 26).fillColor('#1a1a1a').fill();
+  doc.fontSize(11).font('Helvetica-Bold').fillColor('#fff');
+  doc.text('TOTAL', totalsBoxX + 12, y + 7);
+  doc.text(formatCurrency(data.grandTotalCents), totalsBoxX, y + 7, {
+    width: totalsBoxWidth - 12,
+    align: 'right',
+  });
 
-  // Footer
+  // ── Footer ──────────────────────────
+  const footerY = 750;
+  doc.moveTo(PAGE_LEFT, footerY - 15).lineTo(PAGE_RIGHT, footerY - 15).strokeColor('#ddd').stroke();
+  doc.fontSize(10).font('Helvetica-Bold').fillColor('#1a1a1a')
+    .text('Thank you for your business!', PAGE_LEFT, footerY, { width: PAGE_WIDTH, align: 'center' });
+
   if (data.footerNote) {
-    doc.font('Helvetica').fontSize(9).fillColor('#888').text(data.footerNote, 50, 750, {
-      width: 495,
-      align: 'center',
-    });
+    doc.fontSize(8).font('Helvetica').fillColor('#888')
+      .text(data.footerNote, PAGE_LEFT, footerY + 15, { width: PAGE_WIDTH, align: 'center' });
   }
 
   doc.end();
