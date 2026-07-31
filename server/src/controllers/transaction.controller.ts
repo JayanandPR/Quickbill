@@ -141,7 +141,7 @@ export async function createSale(req: Request, res: Response) {
 }
 
 export async function getTransactions(req: Request, res: Response) {
-  const { from, to, page = '1', limit = '10' } = req.query;
+  const { from, to, search, page = '1', limit = '10' } = req.query;
 
   const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 10));
@@ -162,12 +162,25 @@ export async function getTransactions(req: Request, res: Response) {
           },
         }
       : {}),
+    ...(search
+      ? {
+          OR: [
+            { invoiceNumber: { contains: String(search), mode: 'insensitive' as const } },
+            { customer: { name: { contains: String(search), mode: 'insensitive' as const } } },
+            { customer: { phone: { contains: String(search), mode: 'insensitive' as const } } },
+          ],
+        }
+      : {}),
   };
 
   const [transactions, total] = await Promise.all([
     prisma.transaction.findMany({
       where,
-      include: { items: true, cashier: { select: { name: true } } },
+      include: {
+        items: true,
+        cashier: { select: { name: true } },
+        customer: { select: { name: true, phone: true } },
+      },
       orderBy: { createdAt: 'desc' },
       skip,
       take: limitNum,
