@@ -125,18 +125,45 @@ export async function createVendorBill(req: Request, res: Response) {
 }
 
 export async function getVendorBills(req: Request, res: Response) {
-  const { page = '1', limit = '10' } = req.query;
+  const { search, from, to, page = '1', limit = '10' } = req.query;
   const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 10));
 
+  let toDate: Date | undefined;
+  if (to) {
+    toDate = new Date(String(to));
+    toDate.setHours(23, 59, 59, 999);
+  }
+
+  const where = {
+    ...(from || to
+      ? {
+          purchaseDate: {
+            ...(from && { gte: new Date(String(from)) }),
+            ...(toDate && { lte: toDate }),
+          },
+        }
+      : {}),
+    ...(search
+      ? {
+          OR: [
+            { billNumber: { contains: String(search), mode: 'insensitive' as const } },
+            { vendorInvoiceNumber: { contains: String(search), mode: 'insensitive' as const } },
+            { vendor: { name: { contains: String(search), mode: 'insensitive' as const } } },
+          ],
+        }
+      : {}),
+  };
+
   const [bills, total] = await Promise.all([
     prisma.vendorBill.findMany({
+      where,
       include: { items: true, vendor: { select: { name: true } } },
       orderBy: { createdAt: 'desc' },
       skip: (pageNum - 1) * limitNum,
       take: limitNum,
     }),
-    prisma.vendorBill.count(),
+    prisma.vendorBill.count({ where }),
   ]);
 
   return res.status(200).json({

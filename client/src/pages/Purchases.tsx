@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Search, Plus, Minus, Trash2, PackagePlus, X, History, ShoppingCart, AlertTriangle, CheckCircle2, Clock, FileText } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, PackagePlus, X, History, ShoppingCart, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import api from '../lib/api';
 import { centsToDisplay, displayToCents } from '../lib/currency';
 import type { Product, Vendor, PurchaseCartItem, BillPaymentStatus, VendorBill, VendorBillsResponse } from '../types';
@@ -471,17 +471,51 @@ function RecordPurchaseView({ setView }: { setView: (v: View) => void }) {
 // ─────────────────────────────
 // PURCHASE HISTORY
 // ─────────────────────────────
+type DateFilter = 'all' | 'today' | 'week' | 'month' | 'custom';
+
+function getDateRange(filter: DateFilter, customFrom: string, customTo: string) {
+  const today = new Date();
+  const toStr = today.toISOString().split('T')[0];
+
+  if (filter === 'today') return { from: toStr, to: toStr };
+  if (filter === 'week') {
+    const day = today.getDay();
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - diffToMonday);
+    return { from: monday.toISOString().split('T')[0], to: toStr };
+  }
+  if (filter === 'month') {
+    const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    return { from: firstOfMonth.toISOString().split('T')[0], to: toStr };
+  }
+  if (filter === 'custom') return { from: customFrom || undefined, to: customTo || undefined };
+  return { from: undefined, to: undefined };
+}
+
 function PurchaseHistoryView({ setView }: { setView: (v: View) => void }) {
   const [bills, setBills] = useState<VendorBill[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, limit: 10 });
 
+  const [search, setSearch] = useState('');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+
   const loadBills = useCallback(async () => {
     setLoading(true);
     try {
+      const { from, to } = getDateRange(dateFilter, customFrom, customTo);
       const res = await api.get<VendorBillsResponse>('/vendor-bills', {
-        params: { page: String(page), limit: '10' },
+        params: {
+          page: String(page),
+          limit: '10',
+          ...(search && { search }),
+          ...(from && { from }),
+          ...(to && { to }),
+        },
       });
       setBills(res.data.bills);
       setPagination(res.data.pagination);
@@ -490,23 +524,72 @@ function PurchaseHistoryView({ setView }: { setView: (v: View) => void }) {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, search, dateFilter, customFrom, customTo]);
 
   useEffect(() => {
-    loadBills();
+    setPage(1);
+  }, [search, dateFilter, customFrom, customTo]);
+
+  useEffect(() => {
+    const timeout = setTimeout(loadBills, 300);
+    return () => clearTimeout(timeout);
   }, [loadBills]);
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-4 mb-4 shrink-0">
-        <h1 className="text-2xl font-semibold text-gray-800">Purchase History</h1>
-        <button
-          onClick={() => setView('record')}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-md text-gray-600 hover:bg-gray-50"
-        >
-          <ShoppingCart size={16} />
-          Record Purchase
-        </button>
+      <div className="flex items-start justify-between mb-4 shrink-0 gap-4 flex-wrap">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-semibold text-gray-800">Purchase History</h1>
+          <button
+            onClick={() => setView('record')}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-md text-gray-600 hover:bg-gray-50"
+          >
+            <ShoppingCart size={16} />
+            Record Purchase
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Bill no, vendor invoice, or vendor..."
+              className="w-64 border border-gray-300 rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="custom">Custom Range</option>
+          </select>
+
+          {dateFilter === 'custom' && (
+            <>
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-gray-400 text-sm">to</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden min-h-0">
@@ -520,20 +603,19 @@ function PurchaseHistoryView({ setView }: { setView: (v: View) => void }) {
                 <th className="px-5 py-3 font-medium">Purchase Date</th>
                 <th className="px-5 py-3 font-medium">Total</th>
                 <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium w-16"></th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-6 text-center text-gray-400">
+                  <td colSpan={6} className="px-5 py-6 text-center text-gray-400">
                     Loading...
                   </td>
                 </tr>
               ) : bills.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-6 text-center text-gray-400">
-                    No purchases recorded yet.
+                    No purchases found.
                   </td>
                 </tr>
               ) : (
@@ -550,15 +632,6 @@ function PurchaseHistoryView({ setView }: { setView: (v: View) => void }) {
                     </td>
                     <td className="px-5 py-3">
                       <PaymentStatusBadge bill={bill} />
-                    </td>
-                    <td className="px-5 py-3">
-                      <button
-                        onClick={() => viewInvoice(`/vendor-bills/${bill.id}/invoice`, `${bill.billNumber}.pdf`)}
-                        className="text-gray-400 hover:text-blue-600"
-                        title="View Invoice"
-                      >
-                        <FileText size={16} />
-                      </button>
                     </td>
                   </tr>
                 ))
