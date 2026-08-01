@@ -242,3 +242,35 @@ export async function getSalesReport(req: Request, res: Response) {
 
   return res.status(200).json({ report });
 }
+
+// ─────────────────────────────
+// PENDING DUES
+// Combines unpaid Vendor Bills + unpaid Expenses into one figure,
+// since both represent money the business currently owes.
+// ─────────────────────────────
+export async function getPendingDues(req: Request, res: Response) {
+  const [unpaidBills, unpaidExpenses] = await Promise.all([
+    prisma.vendorBill.findMany({
+      where: { paymentStatus: 'UNPAID' },
+      select: { grandTotalCents: true, dueDate: true },
+    }),
+    prisma.expense.findMany({
+      where: { paymentStatus: 'UNPAID' },
+      select: { amountCents: true, dueDate: true },
+    }),
+  ]);
+
+  const vendorBillsDueCents = unpaidBills.reduce((sum, b) => sum + b.grandTotalCents, 0);
+  const expensesDueCents = unpaidExpenses.reduce((sum, e) => sum + e.amountCents, 0);
+  const totalDueCents = vendorBillsDueCents + expensesDueCents;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const isOverdue = (d: Date | null) => d && new Date(d) < today;
+
+  const overdueCount =
+    unpaidBills.filter((b) => isOverdue(b.dueDate)).length +
+    unpaidExpenses.filter((e) => isOverdue(e.dueDate)).length;
+
+  return res.status(200).json({ vendorBillsDueCents, expensesDueCents, totalDueCents, overdueCount });
+}

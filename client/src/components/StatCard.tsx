@@ -4,13 +4,14 @@ interface StatCardProps {
   label: string;
   value: string | number;
   icon: LucideIcon;
-  accent?: 'blue' | 'red' | 'green';
+  accent?: 'blue' | 'red' | 'green' | 'yellow';
 }
 
 const accentClasses = {
   blue: 'bg-blue-50 text-blue-600',
   red: 'bg-red-50 text-red-600',
   green: 'bg-green-50 text-green-600',
+  yellow: 'bg-yellow-50 text-yellow-700',
 };
 
 export default function StatCard({ label, value, icon: Icon, accent = 'blue' }: StatCardProps) {
