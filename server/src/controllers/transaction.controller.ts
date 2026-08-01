@@ -235,11 +235,12 @@ export async function getTransactionInvoice(req: Request, res: Response) {
 
   generateInvoicePdf(
     {
-      documentTitle: 'SALES INVOICE',
+      documentLabel: 'Sales Receipt',
       invoiceNumber: transaction.invoiceNumber,
       date: transaction.createdAt,
-      partyLabel: 'Billed To',
+      partyLabel: 'Customer',
       partyName: transaction.customer?.name ?? 'Walk-in Customer',
+      cashierName: transaction.cashier.name,
       items: transaction.items.map((item) => ({
         name: item.nameSnapshot,
         quantity: item.quantity,
@@ -250,7 +251,7 @@ export async function getTransactionInvoice(req: Request, res: Response) {
       taxCents: transaction.taxCents,
       discountCents: transaction.discountCents,
       grandTotalCents: transaction.grandTotalCents,
-      footerNote: `Served by ${transaction.cashier.name} • Payment: ${transaction.paymentMethod}`,
+      paymentMethod: transaction.paymentMethod,
     },
     res
   );

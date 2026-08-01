@@ -162,12 +162,12 @@ export async function getVendorBillInvoice(req: Request, res: Response) {
 
   generateInvoicePdf(
     {
-      documentTitle: 'PURCHASE INVOICE',
+      documentLabel: 'Purchase Invoice',
       invoiceNumber: bill.billNumber,
-      secondaryReference: { label: 'Vendor Invoice', value: bill.vendorInvoiceNumber },
+      secondaryReference: { label: 'Vendor Inv', value: bill.vendorInvoiceNumber },
       date: bill.purchaseDate,
       dueDate: bill.paymentStatus === 'UNPAID' ? bill.dueDate ?? undefined : undefined,
-      partyLabel: 'Purchased From',
+      partyLabel: 'Vendor',
       partyName: bill.vendor.name,
       items: bill.items.map((item) => ({
         name: item.nameSnapshot,
@@ -178,6 +178,7 @@ export async function getVendorBillInvoice(req: Request, res: Response) {
       subtotalCents: bill.subtotalCents,
       taxCents: bill.taxCents,
       grandTotalCents: bill.grandTotalCents,
+      paymentMethod: bill.paymentStatus,
       footerNote: `Payment Status: ${bill.paymentStatus}`,
     },
     res
