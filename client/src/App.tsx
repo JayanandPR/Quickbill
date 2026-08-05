@@ -15,6 +15,7 @@ import Users from './pages/Users';
 import Purchases from './pages/Purchases';
 import Sales from './pages/Sales';
 import Expenses from './pages/Expenses';
+import Settings from './pages/Settings';
 
 
 function App() {
@@ -110,6 +111,15 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['ADMIN']}>
                   <Expenses />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN']}>
+                  <Settings />
                 </ProtectedRoute>
               }
             />

@@ -192,3 +192,12 @@ export interface ExpensesResponse {
   expenses: Expense[];
   pagination: { page: number; limit: number; total: number; totalPages: number };
 }
+
+export interface BusinessSettings {
+  id: string;
+  businessName: string;
+  logoUrl?: string;
+  address?: string;
+  phone?: string;
+  updatedAt: string;
+}

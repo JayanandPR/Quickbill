@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { buildSaleJournalLines, resolveAndValidateLines } from '../lib/ledger';
 import { generateInvoicePdf } from '../lib/pdf/invoiceLayout';
+import { getOrCreateBusinessSettings, fetchLogoBuffer } from '../lib/settings';
 
 const saleItemInputSchema = z.object({
   productId: z.string().uuid('Invalid product ID'),
@@ -230,11 +231,18 @@ export async function getTransactionInvoice(req: Request, res: Response) {
     return res.status(404).json({ message: 'Transaction not found' });
   }
 
+  const settings = await getOrCreateBusinessSettings();
+  const logoBuffer = await fetchLogoBuffer(settings.logoUrl);
+
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${transaction.invoiceNumber}.pdf"`);
 
   generateInvoicePdf(
     {
+      businessName: settings.businessName,
+      businessAddress: settings.address ?? undefined,
+      businessPhone: settings.phone ?? undefined,
+      logoBuffer,
       documentLabel: 'Sales Receipt',
       invoiceNumber: transaction.invoiceNumber,
       date: transaction.createdAt,

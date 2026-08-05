@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { buildVendorBillJournalLines, resolveAndValidateLines } from '../lib/ledger';
 import { generateInvoicePdf } from '../lib/pdf/invoiceLayout';
+import { getOrCreateBusinessSettings, fetchLogoBuffer } from '../lib/settings';
 
 const billItemSchema = z.object({
   productId: z.string().uuid(),
@@ -184,11 +185,18 @@ export async function getVendorBillInvoice(req: Request, res: Response) {
     return res.status(404).json({ message: 'Vendor bill not found' });
   }
 
+  const settings = await getOrCreateBusinessSettings();
+  const logoBuffer = await fetchLogoBuffer(settings.logoUrl);
+
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${bill.billNumber}.pdf"`);
 
   generateInvoicePdf(
     {
+      businessName: settings.businessName,
+      businessAddress: settings.address ?? undefined,
+      businessPhone: settings.phone ?? undefined,
+      logoBuffer,
       documentLabel: 'Purchase Invoice',
       invoiceNumber: bill.billNumber,
       secondaryReference: { label: 'Vendor Inv', value: bill.vendorInvoiceNumber },

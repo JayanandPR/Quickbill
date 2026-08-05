@@ -8,6 +8,10 @@ export interface LineItem {
 }
 
 export interface InvoiceData {
+  businessName: string;
+  businessAddress?: string;
+  businessPhone?: string;
+  logoBuffer?: Buffer;
   documentLabel: string; // small tag under the shop name, e.g. "Sales Receipt" or "Purchase Invoice"
   invoiceNumber: string;
   date: Date; // full timestamp — time is only displayed if cashierName is present
@@ -95,6 +99,9 @@ export function generateInvoicePdf(data: InvoiceData, stream: NodeJS.WritableStr
     (hasDiscount ? 16 : 0) +
     (hasPayment ? 32 : 0) +
     (hasSecondary || hasDue ? 16 : 0) +
+    (data.logoBuffer ? 56 : 0) +
+    (data.businessAddress ? 10 : 0) +
+    (data.businessPhone ? 10 : 0) +
     80; // barcode + footer buffer
 
   const doc = new PDFDocument({
@@ -109,13 +116,32 @@ export function generateInvoicePdf(data: InvoiceData, stream: NodeJS.WritableStr
   dashedLine(doc, y);
   y += 8;
 
+  if (data.logoBuffer) {
+    try {
+      const logoSize = 50;
+      const logoX = PAGE_LEFT + (CONTENT_WIDTH - logoSize) / 2;
+      doc.image(data.logoBuffer, logoX, y, { fit: [logoSize, logoSize], align: 'center' });
+      y += logoSize + 6;
+    } catch {
+      // Malformed/unsupported image — skip it, invoice still generates fine
+    }
+  }
+
   doc.fontSize(14).font('Courier-Bold').fillColor('#000')
-    .text('QuickBill', PAGE_LEFT, y, { width: CONTENT_WIDTH, align: 'center' });
+    .text(data.businessName, PAGE_LEFT, y, { width: CONTENT_WIDTH, align: 'center' });
   y += 16;
 
-  doc.fontSize(8).font('Courier').fillColor('#333')
-    .text('Retail & Accounting', PAGE_LEFT, y, { width: CONTENT_WIDTH, align: 'center' });
-  y += 11;
+  if (data.businessAddress) {
+    doc.fontSize(7).font('Courier').fillColor('#333')
+      .text(data.businessAddress, PAGE_LEFT, y, { width: CONTENT_WIDTH, align: 'center' });
+    y += 10;
+  }
+  if (data.businessPhone) {
+    doc.fontSize(7).font('Courier').fillColor('#333')
+      .text(`Ph: ${data.businessPhone}`, PAGE_LEFT, y, { width: CONTENT_WIDTH, align: 'center' });
+    y += 10;
+  }
+  y += 1;
 
   doc.fontSize(8).font('Courier-Bold').fillColor('#555')
     .text(data.documentLabel.toUpperCase(), PAGE_LEFT, y, { width: CONTENT_WIDTH, align: 'center', characterSpacing: 1 });

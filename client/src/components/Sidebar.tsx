@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Package, Tags, Users, ShoppingCart, UserCircle, Truck, BarChart3, PackagePlus, Receipt } from 'lucide-react';
+import { LayoutDashboard, Package, Tags, Users, ShoppingCart, UserCircle, Truck, BarChart3, PackagePlus, Receipt, Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const navItemClass = ({ isActive }: { isActive: boolean }) =>
@@ -76,6 +76,10 @@ export default function Sidebar() {
             <NavLink to="/reports" className={navItemClass}>
               <BarChart3 size={18} />
               Reports
+            </NavLink>
+            <NavLink to="/settings" className={navItemClass}>
+              <Settings size={18} />
+              Settings
             </NavLink>
           </>
         )}
