@@ -1,4 +1,5 @@
-import { LogOut } from 'lucide-react';
+import { LogOut, Settings } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Topbar() {
@@ -16,6 +17,16 @@ export default function Topbar() {
       <div />
 
       <div className="flex items-center gap-3">
+        {user?.role === 'ADMIN' && (
+          <Link
+            to="/settings"
+            className="text-gray-400 hover:text-gray-700 transition-colors"
+            title="Business Settings"
+          >
+            <Settings size={18} />
+          </Link>
+        )}
+
         <div className="text-right">
           <p className="text-sm font-medium text-gray-800">{user?.name}</p>
           <p className="text-xs text-gray-400">{user?.role}</p>
