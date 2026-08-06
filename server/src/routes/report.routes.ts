@@ -4,7 +4,8 @@ import {
   getProfitAndLoss,
   getBalanceSheet,
   getSalesReport,
-  getPendingDues
+  getPendingDues,
+  getNotifications
 } from '../controllers/report.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 import { requireRole } from '../middleware/role.middleware';
@@ -17,5 +18,6 @@ router.get('/profit-and-loss', requireAuth, requireRole('ADMIN'), getProfitAndLo
 router.get('/balance-sheet', requireAuth, requireRole('ADMIN'), getBalanceSheet);
 router.get('/sales', requireAuth, requireRole('ADMIN'), getSalesReport);
 router.get('/pending-dues', requireAuth, requireRole('ADMIN'), getPendingDues);
+router.get('/notifications', requireAuth, requireRole('ADMIN'), getNotifications);
 
 export default router;

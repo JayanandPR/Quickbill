@@ -274,3 +274,49 @@ export async function getPendingDues(req: Request, res: Response) {
 
   return res.status(200).json({ vendorBillsDueCents, expensesDueCents, totalDueCents, overdueCount });
 }
+
+// ─────────────────────────────
+// NOTIFICATIONS FEED
+// Aggregates low-stock products, overdue vendor bills, and overdue
+// expenses into one response for the topbar notification bell.
+// ─────────────────────────────
+export async function getNotifications(req: Request, res: Response) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [lowStockProducts, overdueBills, overdueExpenses] = await Promise.all([
+    prisma.$queryRaw<{ id: string; name: string; stockQuantity: number; unit: string }[]>`
+      SELECT id, name, "stockQuantity", unit FROM "Product"
+      WHERE "deletedAt" IS NULL AND "stockQuantity" <= "reorderPoint"
+      ORDER BY "stockQuantity" ASC
+    `,
+    prisma.vendorBill.findMany({
+      where: { paymentStatus: 'UNPAID', dueDate: { lt: today } },
+      include: { vendor: { select: { name: true } } },
+      orderBy: { dueDate: 'asc' },
+    }),
+    prisma.expense.findMany({
+      where: { paymentStatus: 'UNPAID', dueDate: { lt: today } },
+      orderBy: { dueDate: 'asc' },
+    }),
+  ]);
+
+  return res.status(200).json({
+    lowStock: lowStockProducts.map((p) => ({
+      id: p.id,
+      label: p.name,
+      detail: `${p.stockQuantity} ${p.unit} left`,
+    })),
+    overdueBills: overdueBills.map((b) => ({
+      id: b.id,
+      label: b.vendor.name,
+      detail: `${b.billNumber} — ₹${(b.grandTotalCents / 100).toFixed(2)}`,
+    })),
+    overdueExpenses: overdueExpenses.map((e) => ({
+      id: e.id,
+      label: e.category,
+      detail: `₹${(e.amountCents / 100).toFixed(2)}`,
+    })),
+    totalCount: lowStockProducts.length + overdueBills.length + overdueExpenses.length,
+  });
+}

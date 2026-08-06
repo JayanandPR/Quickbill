@@ -1,6 +1,7 @@
 import { LogOut, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import NotificationsBell from './NotificationsBell';
 
 export default function Topbar() {
   const { user, logout } = useAuth();
@@ -17,6 +18,8 @@ export default function Topbar() {
       <div />
 
       <div className="flex items-center gap-3">
+        {user?.role === 'ADMIN' && <NotificationsBell />}
+        
         <Link
           to="/settings"
           className="text-gray-400 hover:text-gray-700 transition-colors"
