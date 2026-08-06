@@ -17,15 +17,13 @@ export default function Topbar() {
       <div />
 
       <div className="flex items-center gap-3">
-        {user?.role === 'ADMIN' && (
-          <Link
-            to="/settings"
-            className="text-gray-400 hover:text-gray-700 transition-colors"
-            title="Business Settings"
-          >
-            <Settings size={18} />
-          </Link>
-        )}
+        <Link
+          to="/settings"
+          className="text-gray-400 hover:text-gray-700 transition-colors"
+          title="Settings"
+        >
+          <Settings size={18} />
+        </Link>
 
         <div className="text-right">
           <p className="text-sm font-medium text-gray-800">{user?.name}</p>

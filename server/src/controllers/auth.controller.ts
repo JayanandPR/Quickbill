@@ -113,3 +113,55 @@ export async function me(req: Request, res: Response) {
 
   return res.status(200).json({ user });
 }
+
+const updateProfileSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(6, 'New password must be at least 6 characters'),
+});
+
+export async function updateProfile(req: Request, res: Response) {
+  const parsed = updateProfileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: parsed.error.issues[0].message });
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: req.user!.userId },
+    data: { name: parsed.data.name },
+    select: { id: true, name: true, email: true, role: true },
+  });
+
+  return res.status(200).json({ message: 'Profile updated successfully', user: updated });
+}
+
+export async function changePassword(req: Request, res: Response) {
+  const parsed = changePasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: parsed.error.issues[0].message });
+  }
+
+  const { currentPassword, newPassword } = parsed.data;
+
+  const user = await prisma.user.findUnique({ where: { id: req.user!.userId } });
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  const passwordMatches = await bcrypt.compare(currentPassword, user.password);
+  if (!passwordMatches) {
+    return res.status(401).json({ message: 'Current password is incorrect' });
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { password: hashedPassword },
+  });
+
+  return res.status(200).json({ message: 'Password changed successfully' });
+}
