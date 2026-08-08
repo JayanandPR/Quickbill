@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
-import { FileText, CheckCircle2, XCircle, RotateCcw, Search } from 'lucide-react';
+import { FileText, CheckCircle2, XCircle, RotateCcw, Search, Download } from 'lucide-react';
 import api from '../lib/api';
 import { centsToDisplay } from '../lib/currency';
 import { viewInvoice } from '../lib/invoice';
 import Pagination from '../components/Pagination';
+import { downloadReport } from '../lib/report';
 
 type DateFilter = 'all' | 'today' | 'week' | 'month' | 'custom';
 
@@ -64,6 +65,15 @@ export default function Sales() {
     }
   }, [page, search, dateFilter, customFrom, customTo]);
 
+  function handleDownload() {
+  const { from, to } = getDateRange(dateFilter, customFrom, customTo);
+  downloadReport(
+    '/transactions/export',
+    { ...(search && { search }), ...(from && { from }), ...(to && { to }) },
+    `sales-report-${new Date().toISOString().split('T')[0]}.pdf`
+  );
+}
+
   // Debounce search + date filter changes, reset to page 1
   useEffect(() => {
     setPage(1);
@@ -122,6 +132,15 @@ export default function Sales() {
               />
             </>
           )}
+
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-gray-200 rounded-md text-gray-600 hover:bg-gray-50"
+          >
+            <Download size={16} />
+            Download PDF
+          </button>
+
         </div>
       </div>
 

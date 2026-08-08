@@ -4,6 +4,8 @@ import { prisma } from '../lib/prisma';
 import { buildSaleJournalLines, resolveAndValidateLines } from '../lib/ledger';
 import { generateInvoicePdf } from '../lib/pdf/invoiceLayout';
 import { getOrCreateBusinessSettings, fetchLogoBuffer } from '../lib/settings';
+import { generateListReportPdf } from '../lib/pdf/listReportLayout';
+import { getBusinessBranding } from '../lib/businessBranding';
 
 const saleItemInputSchema = z.object({
   productId: z.string().uuid('Invalid product ID'),
@@ -260,6 +262,81 @@ export async function getTransactionInvoice(req: Request, res: Response) {
       discountCents: transaction.discountCents,
       grandTotalCents: transaction.grandTotalCents,
       paymentMethod: transaction.paymentMethod,
+    },
+    res
+  );
+}
+
+export async function getTransactionsExport(req: Request, res: Response) {
+  const { from, to, search } = req.query;
+
+  let toDate: Date | undefined;
+  if (to) {
+    toDate = new Date(String(to));
+    toDate.setHours(23, 59, 59, 999);
+  }
+
+  const where = {
+    ...(from || to
+      ? {
+          createdAt: {
+            ...(from && { gte: new Date(String(from)) }),
+            ...(toDate && { lte: toDate }),
+          },
+        }
+      : {}),
+    ...(search
+      ? {
+          OR: [
+            { invoiceNumber: { contains: String(search), mode: 'insensitive' as const } },
+            { customer: { name: { contains: String(search), mode: 'insensitive' as const } } },
+            { customer: { phone: { contains: String(search), mode: 'insensitive' as const } } },
+          ],
+        }
+      : {}),
+  };
+
+  const transactions = await prisma.transaction.findMany({
+    where,
+    include: { cashier: { select: { name: true } }, customer: { select: { name: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const branding = await getBusinessBranding();
+
+  const filterParts: string[] = [];
+  if (from) filterParts.push(`From: ${new Date(String(from)).toLocaleDateString('en-IN')}`);
+  if (to) filterParts.push(`To: ${new Date(String(to)).toLocaleDateString('en-IN')}`);
+  if (search) filterParts.push(`Search: "${search}"`);
+
+  const totalCents = transactions.reduce((sum, t) => sum + t.grandTotalCents, 0);
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="sales-report.pdf"');
+
+  generateListReportPdf(
+    {
+      ...branding,
+      title: 'Sales Report',
+      filterSummary: filterParts.join('   •   ') || 'All Time',
+      columns: [
+        { key: 'invoiceNumber', label: 'Invoice No.', width: 90 },
+        { key: 'customer', label: 'Customer', width: 100 },
+        { key: 'cashier', label: 'Cashier', width: 80 },
+        { key: 'date', label: 'Date', width: 70 },
+        { key: 'payment', label: 'Payment', width: 60 },
+        { key: 'total', label: 'Total', width: 75, align: 'right' },
+      ],
+      rows: transactions.map((t) => ({
+        invoiceNumber: t.invoiceNumber,
+        customer: t.customer?.name ?? 'Walk-in',
+        cashier: t.cashier.name,
+        date: t.createdAt.toLocaleDateString('en-IN'),
+        payment: t.paymentMethod,
+        total: `Rs. ${(t.grandTotalCents / 100).toFixed(2)}`,
+      })),
+      totalLabel: 'Grand Total',
+      totalValue: `Rs. ${(totalCents / 100).toFixed(2)}`,
     },
     res
   );

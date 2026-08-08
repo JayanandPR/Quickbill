@@ -1,11 +1,37 @@
 import { useEffect, useState, useCallback } from 'react';
-import { History, Receipt, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { History, Receipt, AlertTriangle, CheckCircle2, Clock, Download, Search } from 'lucide-react';
 import api from '../lib/api';
 import { centsToDisplay, displayToCents } from '../lib/currency';
 import type { Expense, ExpensesResponse, BillPaymentStatus, ExpenseAccountCode } from '../types';
 import Pagination from '../components/Pagination';
+import { downloadReport } from '../lib/report';
 
 type View = 'record' | 'history';
+type DateFilter = 'all' | 'today' | 'week' | 'month' | 'custom';
+
+function getDateRange(filter: DateFilter, customFrom: string, customTo: string) {
+  const today = new Date();
+  const toStr = today.toISOString().split('T')[0];
+
+  if (filter === 'today') {
+    return { from: toStr, to: toStr };
+  }
+  if (filter === 'week') {
+    const day = today.getDay(); // 0 = Sunday
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - diffToMonday);
+    return { from: monday.toISOString().split('T')[0], to: toStr };
+  }
+  if (filter === 'month') {
+    const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    return { from: firstOfMonth.toISOString().split('T')[0], to: toStr };
+  }
+  if (filter === 'custom') {
+    return { from: customFrom || undefined, to: customTo || undefined };
+  }
+  return { from: undefined, to: undefined };
+}
 
 const EXPENSE_CATEGORIES: { label: string; accountCode: ExpenseAccountCode }[] = [
   { label: 'Salaries & Wages', accountCode: '5200' },
@@ -208,11 +234,23 @@ function ExpenseHistoryView({ setView }: { setView: (v: View) => void }) {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, limit: 10 });
 
+  const [search, setSearch] = useState('');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+
   const loadExpenses = useCallback(async () => {
     setLoading(true);
     try {
+      const { from, to } = getDateRange(dateFilter, customFrom, customTo);
       const res = await api.get<ExpensesResponse>('/expenses', {
-        params: { page: String(page), limit: '10' },
+        params: {
+          page: String(page),
+          limit: '10',
+          ...(search && { search }),
+          ...(from && { from }),
+          ...(to && { to }),
+        },
       });
       setExpenses(res.data.expenses);
       setPagination(res.data.pagination);
@@ -221,23 +259,89 @@ function ExpenseHistoryView({ setView }: { setView: (v: View) => void }) {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, search, dateFilter, customFrom, customTo]);
 
   useEffect(() => {
-    loadExpenses();
+    setPage(1);
+  }, [search, dateFilter, customFrom, customTo]);
+
+  useEffect(() => {
+    const timeout = setTimeout(loadExpenses, 300);
+    return () => clearTimeout(timeout);
   }, [loadExpenses]);
+
+  function handleDownload() {
+    const { from, to } = getDateRange(dateFilter, customFrom, customTo);
+    downloadReport(
+      '/expenses/export',
+      { ...(search && { search }), ...(from && { from }), ...(to && { to }) },
+      `expense-report-${new Date().toISOString().split('T')[0]}.pdf`
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-4 mb-4 shrink-0">
-        <h1 className="text-2xl font-semibold text-gray-800">Expense History</h1>
-        <button
-          onClick={() => setView('record')}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-md text-gray-600 hover:bg-gray-50"
-        >
-          <Receipt size={16} />
-          Record Expense
-        </button>
+      <div className="flex items-start justify-between mb-4 shrink-0 gap-4 flex-wrap">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-semibold text-gray-800">Expense History</h1>
+          <button
+            onClick={() => setView('record')}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-md text-gray-600 hover:bg-gray-50"
+          >
+            <Receipt size={16} />
+            Record Expense
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Category or note..."
+              className="w-56 border border-gray-300 rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="custom">Custom Range</option>
+          </select>
+
+          {dateFilter === 'custom' && (
+            <>
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-gray-400 text-sm">to</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </>
+          )}
+
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-gray-200 rounded-md text-gray-600 hover:bg-gray-50"
+          >
+            <Download size={16} />
+            Download PDF
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden min-h-0">
@@ -259,7 +363,7 @@ function ExpenseHistoryView({ setView }: { setView: (v: View) => void }) {
                 </tr>
               ) : expenses.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-6 text-center text-gray-400">No expenses recorded yet.</td>
+                  <td colSpan={5} className="px-5 py-6 text-center text-gray-400">No expenses found.</td>
                 </tr>
               ) : (
                 expenses.map((exp) => (

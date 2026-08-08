@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Search, Plus, Minus, Trash2, PackagePlus, X, History, ShoppingCart, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, PackagePlus, X, History, ShoppingCart, AlertTriangle, CheckCircle2, Clock, Download } from 'lucide-react';
 import api from '../lib/api';
 import { centsToDisplay, displayToCents } from '../lib/currency';
 import type { Product, Vendor, PurchaseCartItem, BillPaymentStatus, VendorBill, VendorBillsResponse } from '../types';
 import Pagination from '../components/Pagination';
 import { viewInvoice } from '../lib/invoice';
+import { downloadReport } from '../lib/report';
+
 
 type View = 'record' | 'history';
 
@@ -526,6 +528,15 @@ function PurchaseHistoryView({ setView }: { setView: (v: View) => void }) {
     }
   }, [page, search, dateFilter, customFrom, customTo]);
 
+  function handleDownload() {
+    const { from, to } = getDateRange(dateFilter, customFrom, customTo);
+    downloadReport(
+      '/vendor-bills/export',
+      { ...(search && { search }), ...(from && { from }), ...(to && { to }) },
+      `purchase-report-${new Date().toISOString().split('T')[0]}.pdf`
+    );
+  }
+
   useEffect(() => {
     setPage(1);
   }, [search, dateFilter, customFrom, customTo]);
@@ -589,6 +600,15 @@ function PurchaseHistoryView({ setView }: { setView: (v: View) => void }) {
               />
             </>
           )}
+
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-gray-200 rounded-md text-gray-600 hover:bg-gray-50"
+          >
+            <Download size={16} />
+            Download PDF
+          </button>
+          
         </div>
       </div>
 

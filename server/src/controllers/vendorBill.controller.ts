@@ -4,6 +4,8 @@ import { prisma } from '../lib/prisma';
 import { buildVendorBillJournalLines, resolveAndValidateLines } from '../lib/ledger';
 import { generateInvoicePdf } from '../lib/pdf/invoiceLayout';
 import { getOrCreateBusinessSettings, fetchLogoBuffer } from '../lib/settings';
+import { generateListReportPdf } from '../lib/pdf/listReportLayout';
+import { getBusinessBranding } from '../lib/businessBranding';
 
 const billItemSchema = z.object({
   productId: z.string().uuid(),
@@ -215,6 +217,81 @@ export async function getVendorBillInvoice(req: Request, res: Response) {
       grandTotalCents: bill.grandTotalCents,
       paymentMethod: bill.paymentStatus,
       footerNote: `Payment Status: ${bill.paymentStatus}`,
+    },
+    res
+  );
+}
+
+export async function getVendorBillsExport(req: Request, res: Response) {
+  const { search, from, to } = req.query;
+
+  let toDate: Date | undefined;
+  if (to) {
+    toDate = new Date(String(to));
+    toDate.setHours(23, 59, 59, 999);
+  }
+
+  const where = {
+    ...(from || to
+      ? {
+          purchaseDate: {
+            ...(from && { gte: new Date(String(from)) }),
+            ...(toDate && { lte: toDate }),
+          },
+        }
+      : {}),
+    ...(search
+      ? {
+          OR: [
+            { billNumber: { contains: String(search), mode: 'insensitive' as const } },
+            { vendorInvoiceNumber: { contains: String(search), mode: 'insensitive' as const } },
+            { vendor: { name: { contains: String(search), mode: 'insensitive' as const } } },
+          ],
+        }
+      : {}),
+  };
+
+  const bills = await prisma.vendorBill.findMany({
+    where,
+    include: { vendor: { select: { name: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const branding = await getBusinessBranding();
+
+  const filterParts: string[] = [];
+  if (from) filterParts.push(`From: ${new Date(String(from)).toLocaleDateString('en-IN')}`);
+  if (to) filterParts.push(`To: ${new Date(String(to)).toLocaleDateString('en-IN')}`);
+  if (search) filterParts.push(`Search: "${search}"`);
+
+  const totalCents = bills.reduce((sum, b) => sum + b.grandTotalCents, 0);
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="purchase-report.pdf"');
+
+  generateListReportPdf(
+    {
+      ...branding,
+      title: 'Purchase Report',
+      filterSummary: filterParts.join('   •   ') || 'All Time',
+      columns: [
+        { key: 'billNumber', label: 'Bill No.', width: 85 },
+        { key: 'vendorInvoice', label: 'Vendor Invoice', width: 90 },
+        { key: 'vendor', label: 'Vendor', width: 110 },
+        { key: 'date', label: 'Date', width: 70 },
+        { key: 'total', label: 'Total', width: 65, align: 'right' },
+        { key: 'status', label: 'Status', width: 55 },
+      ],
+      rows: bills.map((b) => ({
+        billNumber: b.billNumber,
+        vendorInvoice: b.vendorInvoiceNumber,
+        vendor: b.vendor.name,
+        date: b.purchaseDate.toLocaleDateString('en-IN'),
+        total: `Rs. ${(b.grandTotalCents / 100).toFixed(2)}`,
+        status: b.paymentStatus,
+      })),
+      totalLabel: 'Grand Total',
+      totalValue: `Rs. ${(totalCents / 100).toFixed(2)}`,
     },
     res
   );
